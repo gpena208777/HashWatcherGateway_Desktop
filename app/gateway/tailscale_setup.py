@@ -127,7 +127,7 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
         }
 
     _ensure_ip_forwarding()
-    ts_hostname = os.getenv("PI_HOSTNAME", os.getenv("COMPUTERNAME", "HashWatcherGateway"))
+    ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(
         hostname=ts_hostname,
         advertise_routes=resolved_cidr,
@@ -283,7 +283,7 @@ def up() -> Dict[str, Any]:
         routes_str = ",".join(routes) if routes else ""
 
     _ensure_ip_forwarding()
-    ts_hostname = os.getenv("PI_HOSTNAME", os.getenv("COMPUTERNAME", "HashWatcherGateway"))
+    ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(hostname=ts_hostname, advertise_routes=routes_str or None)
     result = _run(cmd, timeout=90)
     if result.returncode != 0:

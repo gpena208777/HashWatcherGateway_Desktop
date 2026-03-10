@@ -110,7 +110,7 @@ class HubState:
 
 class HubAgent:
     def __init__(self) -> None:
-        self.hostname = env_str("PI_HOSTNAME", socket.gethostname())
+        self.hostname = env_str("PI_HOSTNAME", "HashWatcherGatewayDesktop")
         self.bitaxe_host = env_str("BITAXE_HOST", "")
         self.bitaxe_scheme = env_str("BITAXE_SCHEME", "http")
         self.endpoints = self._parse_endpoints(env_str("BITAXE_ENDPOINTS", "/system/info,/api/system/info"))
@@ -120,7 +120,7 @@ class HubAgent:
         self.status_http_port = max(1, env_int("STATUS_HTTP_PORT", 8787))
         runtime_default = str(Path.home() / ".hashwatcher-gateway" / "runtime_config.json")
         self.runtime_config_path = env_str("RUNTIME_CONFIG_PATH", runtime_default)
-        self.agent_id = env_str("AGENT_ID", "hashwatcher-gateway")
+        self.agent_id = env_str("AGENT_ID", "hashwatcher-gateway-desktop")
 
         self.paired_device_type = ""
         self.paired_miner_mac = ""
@@ -756,7 +756,7 @@ class HubAgent:
         local_ip = net.get("localIp") or "-"
         ts_ip = ts_status.get("ip", "-")
         ts_hostname_actual = ts_status.get("hostname", "-")
-        ts_machine_name = os.getenv("PI_HOSTNAME", "HashWatcherGateway")
+        ts_machine_name = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
         ts_online = ts_status.get("online", False)
         ts_installed = ts_status.get("installed", False)
         key_expired = ts_status.get("keyExpired", False)
@@ -769,7 +769,7 @@ class HubAgent:
         app_version = env_str("APP_VERSION", "latest")
         support_mailto = (
             "mailto:info@engineeredessentials.com"
-            "?subject=HashWatcherGateway%20help"
+            "?subject=HashWatcherGatewayDesktop%20help"
             f"&body=%0A%0A---%0AApp%20version:%20{app_version}%0A"
         )
 

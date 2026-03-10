@@ -15,7 +15,7 @@
   <onfailure action="restart" delay="5 sec"/>
 
   <env name="PYTHONUNBUFFERED" value="1"/>
+  <env name="PI_HOSTNAME" value="HashWatcherGatewayDesktop"/>
   <env name="STATUS_HTTP_BIND" value="0.0.0.0"/>
   <env name="STATUS_HTTP_PORT" value="8787"/>
 </service>
-

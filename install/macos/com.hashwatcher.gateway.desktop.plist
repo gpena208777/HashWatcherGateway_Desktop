@@ -30,6 +30,8 @@
   <dict>
     <key>PYTHONUNBUFFERED</key>
     <string>1</string>
+    <key>PI_HOSTNAME</key>
+    <string>HashWatcherGatewayDesktop</string>
     <key>STATUS_HTTP_BIND</key>
     <string>0.0.0.0</string>
     <key>STATUS_HTTP_PORT</key>
@@ -37,4 +39,3 @@
   </dict>
 </dict>
 </plist>
-
