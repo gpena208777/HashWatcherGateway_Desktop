@@ -21,9 +21,12 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 ## Prerequisites
 
 1. Install Python 3.10+ (with Tkinter support).
-2. Install Tailscale from [tailscale.com/download](https://tailscale.com/download).
-3. Sign in to Tailscale at least once on the machine.
-4. Clone this repo.
+2. Clone this repo.
+
+For source/developer runs, you need Tailscale binaries available either:
+
+- system-installed (`tailscale` + `tailscaled`), or
+- vendored into `app/vendor/tailscale/<platform>/` (embedded runtime mode).
 
 ## Project Layout
 
@@ -43,6 +46,22 @@ scripts/
 requirements.txt
 ```
 
+## Embedded Tailscale Runtime
+
+To run like Umbrel/Pi (self-managed local daemon), prepare embedded binaries:
+
+```bash
+./scripts/prepare_embedded_tailscale.sh
+```
+
+This copies `tailscale` and `tailscaled` into:
+
+`app/vendor/tailscale/<platform>/`
+
+Then launch GUI normally and it will auto-start embedded `tailscaled`.
+
+Note: for end-user packaged app builds, include these binaries in the app bundle so users do not need standalone Tailscale install.
+
 ## Local Run (Any Platform)
 
 ### GUI App (Recommended)
@@ -51,12 +70,13 @@ The GUI now includes a guided wizard with iPhone-style next steps:
 
 - Start/stop gateway process
 - Step-by-step `Back` / `Next` flow
-- One-click local Tailscale launch
-- Tailscale auth key entry
+- Tailscale auth key generation via Tailscale API
+- Tailnet + API key fields for in-app key generation
 - Subnet entry
 - Connect / turn on / turn off / disconnect actions
 - Live route-approval status checks
 - Direct links to Tailscale Keys and Machines pages
+- Embedded `tailscaled` auto-start support when bundled
 
 ### macOS/Linux
 
@@ -137,14 +157,13 @@ Logs:
 
 The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
 
-## Tailscale Setup Flow (In-App Wizard)
+## Tailscale Setup Flow (In-App Wizard, API-first)
 
 1. Open the GUI (`python app/gui.py`) and click **Start Gateway**.
 2. Open **Guided Onboarding** tab.
 3. Use the wizard action button and `Next` through:
    - Start Gateway
-   - Launch Tailscale
-   - Open Keys page
+   - Generate Auth Key via API
    - Connect with auth key
    - Open Machines page for route approval
    - Refresh and verify completion
@@ -165,6 +184,8 @@ The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
 - `POLL_SECONDS` default: `10`
 - `HTTP_TIMEOUT_SECONDS` default: `5`
 - `TAILSCALE_BIN` optional absolute path to `tailscale`
+- `TAILSCALED_BIN` optional absolute path to `tailscaled`
+- `TS_EMBEDDED` default: `1` (auto-start embedded daemon when available)
 - `HOST_IP` optional manual LAN IP override for subnet detection
 - `TS_ACCEPT_ROUTES` default: `false`
 - `DEFAULT_LAN_PREFIX` default: `24`

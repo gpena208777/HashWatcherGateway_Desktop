@@ -15,8 +15,10 @@ from typing import Any, Dict, List, Optional
 
 try:
     from . import network_utils
+    from . import embedded_tailscale
 except ImportError:  # pragma: no cover - direct script execution fallback
     import network_utils  # type: ignore
+    import embedded_tailscale  # type: ignore
 
 
 def _tailscale_bin() -> str:
@@ -24,18 +26,13 @@ def _tailscale_bin() -> str:
     if explicit:
         return explicit
 
+    cli, _daemon = embedded_tailscale.resolve_binaries()
+    if cli:
+        return cli
+
     resolved = shutil.which("tailscale")
     if resolved:
         return resolved
-
-    candidates = [
-        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
-        r"C:\Program Files\Tailscale\tailscale.exe",
-        r"C:\Program Files (x86)\Tailscale\tailscale.exe",
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
     return "tailscale"
 
 
@@ -48,6 +45,8 @@ def _run(cmd: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
 
 def _start_local_tailscale_service() -> None:
     """Best-effort launch of local Tailscale service/client."""
+    if embedded_tailscale.ensure_started():
+        return
     system_name = platform.system()
     try:
         if system_name == "Darwin":
@@ -69,8 +68,17 @@ def _start_local_tailscale_service() -> None:
 
 
 def is_installed() -> bool:
-    result = _run([_tailscale_bin(), "version"], timeout=8)
+    _start_local_tailscale_service()
+    result = _run(_ts_cmd(["version"], include_socket=False), timeout=8)
     return result.returncode == 0
+
+
+def _ts_cmd(args: List[str], include_socket: bool = True) -> List[str]:
+    cmd = [_tailscale_bin(), *args]
+    sock = embedded_tailscale.socket_path() if include_socket else None
+    if sock:
+        cmd.append(f"--socket={sock}")
+    return cmd
 
 
 def _ensure_ip_forwarding() -> None:
@@ -160,6 +168,7 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
         }
 
     _ensure_ip_forwarding()
+    _start_local_tailscale_service()
     ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(
         hostname=ts_hostname,
@@ -167,6 +176,9 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
         auth_key=auth_key,
         reset=True,
     )
+    socket_opt = embedded_tailscale.socket_path()
+    if socket_opt:
+        cmd.append(f"--socket={socket_opt}")
 
     proc_result: Dict[str, Any] = {}
 
@@ -244,13 +256,14 @@ def status() -> Dict[str, Any]:
     if not info["installed"]:
         return info
 
-    result = _run([_tailscale_bin(), "status", "--json"], timeout=20)
+    _start_local_tailscale_service()
+    result = _run(_ts_cmd(["status", "--json"]), timeout=20)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
         if _local_service_unreachable(stderr):
             _start_local_tailscale_service()
             time.sleep(2)
-            retry = _run([_tailscale_bin(), "status", "--json"], timeout=20)
+            retry = _run(_ts_cmd(["status", "--json"]), timeout=20)
             if retry.returncode == 0:
                 result = retry
                 stderr = ""
@@ -317,7 +330,7 @@ def down() -> Dict[str, Any]:
     """Turn Tailscale off while keeping local auth state."""
     if not is_installed():
         return {"ok": False, "error": "tailscale is not installed"}
-    result = _run([_tailscale_bin(), "down"], timeout=15)
+    result = _run(_ts_cmd(["down"]), timeout=15)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
         if "not connected" in stderr.lower() or "not running" in stderr.lower():
@@ -341,8 +354,12 @@ def up() -> Dict[str, Any]:
         routes_str = ",".join(routes) if routes else ""
 
     _ensure_ip_forwarding()
+    _start_local_tailscale_service()
     ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(hostname=ts_hostname, advertise_routes=routes_str or None)
+    socket_opt = embedded_tailscale.socket_path()
+    if socket_opt:
+        cmd.append(f"--socket={socket_opt}")
     result = _run(cmd, timeout=90)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
@@ -379,8 +396,8 @@ def logout() -> Dict[str, Any]:
     if not is_installed():
         return {"ok": False, "error": "tailscale is not installed"}
 
-    _run([_tailscale_bin(), "down"], timeout=15)
-    result = _run([_tailscale_bin(), "logout"], timeout=20)
+    _run(_ts_cmd(["down"]), timeout=15)
+    result = _run(_ts_cmd(["logout"]), timeout=20)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
         if "not logged in" not in stderr.lower():
@@ -391,7 +408,7 @@ def logout() -> Dict[str, Any]:
 
 def _get_prefs() -> Optional[Dict[str, Any]]:
     """Read tailscale debug prefs for route state."""
-    result = _run([_tailscale_bin(), "debug", "prefs"], timeout=15)
+    result = _run(_ts_cmd(["debug", "prefs"]), timeout=15)
     if result.returncode != 0:
         return None
     try:
