@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hashwatcher.gateway.desktop</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON_BIN__</string>
+    <string>__APP_MAIN__</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>__APP_WORKDIR__</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__STDOUT_LOG__</string>
+
+  <key>StandardErrorPath</key>
+  <string>__STDERR_LOG__</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONUNBUFFERED</key>
+    <string>1</string>
+    <key>STATUS_HTTP_BIND</key>
+    <string>0.0.0.0</string>
+    <key>STATUS_HTTP_PORT</key>
+    <string>8787</string>
+  </dict>
+</dict>
+</plist>
+

@@ -1,0 +1,21 @@
+<service>
+  <id>HashWatcherGatewayDesktop</id>
+  <name>HashWatcher Gateway Desktop</name>
+  <description>HashWatcher desktop gateway service</description>
+
+  <executable>__PYTHON_EXE__</executable>
+  <arguments>__APP_MAIN__</arguments>
+  <workingdirectory>__APP_WORKDIR__</workingdirectory>
+
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+
+  <onfailure action="restart" delay="5 sec"/>
+
+  <env name="PYTHONUNBUFFERED" value="1"/>
+  <env name="STATUS_HTTP_BIND" value="0.0.0.0"/>
+  <env name="STATUS_HTTP_PORT" value="8787"/>
+</service>
+

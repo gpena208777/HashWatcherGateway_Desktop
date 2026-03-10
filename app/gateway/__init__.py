@@ -1,0 +1,2 @@
+"""HashWatcher Gateway desktop package."""
+
