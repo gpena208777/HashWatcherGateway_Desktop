@@ -20,7 +20,7 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 
 ## Prerequisites
 
-1. Install Python 3.10+.
+1. Install Python 3.10+ (with Tkinter support).
 2. Install Tailscale from [tailscale.com/download](https://tailscale.com/download).
 3. Sign in to Tailscale at least once on the machine.
 4. Clone this repo.
@@ -30,6 +30,7 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 ```text
 app/
   main.py
+  gui.py
   gateway/
     hub_agent.py
     tailscale_setup.py
@@ -44,14 +45,17 @@ requirements.txt
 
 ## Local Run (Any Platform)
 
+### GUI App (Recommended)
+
+The GUI starts/stops the gateway process, shows live logs, and opens the dashboard.
+
 ### macOS/Linux
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-export PI_HOSTNAME=HashWatcherGatewayDesktop
-python app/main.py
+python app/gui.py
 ```
 
 ### Windows (PowerShell)
@@ -60,14 +64,22 @@ python app/main.py
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:PI_HOSTNAME = "HashWatcherGatewayDesktop"
-python .\app\main.py
+python .\app\gui.py
 ```
 
 Open:
 
 - Dashboard: `http://localhost:8787`
 - API status: `http://localhost:8787/api/status`
+
+### Headless Run (Optional)
+
+If you want to run without the GUI:
+
+```bash
+export PI_HOSTNAME=HashWatcherGatewayDesktop
+python app/main.py
+```
 
 ## Install As Background Service
 
