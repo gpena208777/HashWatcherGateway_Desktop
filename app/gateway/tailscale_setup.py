@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import threading
@@ -43,6 +44,28 @@ def _run(cmd: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
         return subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=timeout)
     except FileNotFoundError:
         return subprocess.CompletedProcess(cmd, returncode=127, stdout="", stderr=f"{cmd[0]}: not found")
+
+
+def _start_local_tailscale_service() -> None:
+    """Best-effort launch of local Tailscale service/client."""
+    system_name = platform.system()
+    try:
+        if system_name == "Darwin":
+            subprocess.run(["open", "-a", "Tailscale"], check=False, capture_output=True, text=True, timeout=5)
+            return
+        if system_name == "Windows":
+            candidates = [
+                r"C:\Program Files\Tailscale\tailscale.exe",
+                r"C:\Program Files (x86)\Tailscale\tailscale.exe",
+            ]
+            for exe in candidates:
+                if os.path.exists(exe):
+                    subprocess.Popen([exe])
+                    return
+            subprocess.run(["sc", "start", "Tailscale"], check=False, capture_output=True, text=True, timeout=8)
+            return
+    except Exception:
+        return
 
 
 def is_installed() -> bool:
@@ -86,6 +109,16 @@ def _permission_hint(stderr: str) -> str:
             "Run the gateway with administrator/root permissions once to configure routes."
         )
     return ""
+
+
+def _local_service_unreachable(stderr: str) -> bool:
+    text = stderr.lower()
+    return (
+        "failed to connect to local tailscale service" in text
+        or "tailscaled.sock" in text
+        or "is tailscale running" in text
+        or "cannot connect to local tailscaled" in text
+    )
 
 
 def _tailscale_up_cmd(
@@ -149,6 +182,23 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
 
     if not thread.is_alive() and proc_result.get("returncode", 0) != 0:
         stderr = (proc_result.get("stderr") or proc_result.get("stdout") or "").strip()
+        if _local_service_unreachable(stderr):
+            _start_local_tailscale_service()
+            time.sleep(2)
+            retry = _run(cmd, timeout=120)
+            if retry.returncode == 0:
+                stderr = ""
+            else:
+                stderr = (retry.stderr or retry.stdout or "").strip()
+        if not stderr:
+            current = status()
+            if current.get("authenticated") and current.get("ip"):
+                return {
+                    "ok": True,
+                    "advertisedRoutes": [resolved_cidr],
+                    "ip": current.get("ip"),
+                    "hostname": current.get("hostname"),
+                }
         hint = _permission_hint(stderr)
         error = f"tailscale up failed: {stderr}" if stderr else "tailscale up failed"
         return {"ok": False, "error": error, "hint": hint or None}
@@ -197,10 +247,18 @@ def status() -> Dict[str, Any]:
     result = _run([_tailscale_bin(), "status", "--json"], timeout=20)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
+        if _local_service_unreachable(stderr):
+            _start_local_tailscale_service()
+            time.sleep(2)
+            retry = _run([_tailscale_bin(), "status", "--json"], timeout=20)
+            if retry.returncode == 0:
+                result = retry
+                stderr = ""
         hint = _permission_hint(stderr)
-        if hint:
-            info["hint"] = hint
-        return info
+        if result.returncode != 0:
+            if hint:
+                info["hint"] = hint
+            return info
 
     try:
         data = json.loads(result.stdout)
@@ -288,6 +346,23 @@ def up() -> Dict[str, Any]:
     result = _run(cmd, timeout=90)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
+        if _local_service_unreachable(stderr):
+            _start_local_tailscale_service()
+            time.sleep(2)
+            retry = _run(cmd, timeout=90)
+            if retry.returncode == 0:
+                result = retry
+                stderr = ""
+            else:
+                stderr = (retry.stderr or retry.stdout or "").strip()
+        if result.returncode == 0:
+            current = status()
+            return {
+                "ok": True,
+                "ip": current.get("ip"),
+                "hostname": current.get("hostname"),
+                "advertisedRoutes": [routes_str] if routes_str else [],
+            }
         hint = _permission_hint(stderr)
         return {"ok": False, "error": stderr or "tailscale up failed", "hint": hint or None}
     current = status()

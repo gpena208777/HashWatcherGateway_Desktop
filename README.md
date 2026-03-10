@@ -47,7 +47,16 @@ requirements.txt
 
 ### GUI App (Recommended)
 
-The GUI starts/stops the gateway process, shows live logs, and opens the dashboard.
+The GUI now includes a guided wizard with iPhone-style next steps:
+
+- Start/stop gateway process
+- Step-by-step `Back` / `Next` flow
+- One-click local Tailscale launch
+- Tailscale auth key entry
+- Subnet entry
+- Connect / turn on / turn off / disconnect actions
+- Live route-approval status checks
+- Direct links to Tailscale Keys and Machines pages
 
 ### macOS/Linux
 
@@ -128,15 +137,20 @@ Logs:
 
 The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
 
-## Tailscale Setup Flow
+## Tailscale Setup Flow (In-App Wizard)
 
-1. Open `http://localhost:8787`.
-2. Enter Tailscale auth key.
-3. Connect Tailscale.
-4. In Tailscale admin Machines page, approve advertised subnet routes.
-5. Confirm `/api/tailscale/status` reports:
-   - `authenticated: true`
-   - `routesApproved: true`
+1. Open the GUI (`python app/gui.py`) and click **Start Gateway**.
+2. Open **Guided Onboarding** tab.
+3. Use the wizard action button and `Next` through:
+   - Start Gateway
+   - Launch Tailscale
+   - Open Keys page
+   - Connect with auth key
+   - Open Machines page for route approval
+   - Refresh and verify completion
+4. Completion criteria in status panel:
+   - Tailscale is online/authenticated
+   - Route approval is approved
 
 ## Runtime Environment Variables
 
