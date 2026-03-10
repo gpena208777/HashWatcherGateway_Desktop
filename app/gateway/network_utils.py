@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import platform
 import socket
+import subprocess
 from typing import Iterable, Optional, Tuple
 
 try:
@@ -100,6 +102,57 @@ def get_local_lan_ip(host_ip: Optional[str] = None) -> Optional[str]:
     if candidates:
         candidates.sort(key=_sort_key)
         return candidates[0][1]
+
+    # Platform fallbacks for environments where psutil is unavailable/incomplete.
+    system_name = platform.system()
+    if system_name == "Darwin":
+        for iface in ("en0", "en1", "en2"):
+            try:
+                result = subprocess.run(
+                    ["ipconfig", "getifaddr", iface],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                )
+                ip = (result.stdout or "").strip()
+                if result.returncode == 0 and is_lan_ipv4(ip):
+                    return ip
+            except Exception:
+                continue
+
+        try:
+            result = subprocess.run(
+                ["ifconfig"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if result.returncode == 0:
+                for token in result.stdout.split():
+                    if token.count(".") == 3 and is_lan_ipv4(token):
+                        return token
+        except Exception:
+            pass
+
+    if system_name == "Linux":
+        try:
+            result = subprocess.run(
+                ["ip", "-4", "-o", "addr", "show"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if result.returncode == 0:
+                for part in result.stdout.split():
+                    if "/" in part and part.count(".") == 3:
+                        ip = part.split("/", 1)[0]
+                        if is_lan_ipv4(ip):
+                            return ip
+        except Exception:
+            pass
 
     # Last-resort fallback for restricted environments.
     try:
