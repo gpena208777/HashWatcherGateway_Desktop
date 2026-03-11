@@ -1,7 +1,7 @@
 # HashWatcher Gateway Desktop
 
 <p align="center">
-  <img src="app/gateway/assets/icon.png" alt="HashWatcher Logo" width="152" />
+  <img src="app/gateway/assets/imagelogo copy.png" alt="HashWatcher Logo" width="152" />
 </p>
 
 Standalone desktop gateway for macOS and Windows that mirrors Umbrel gateway behavior:
