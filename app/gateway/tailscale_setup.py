@@ -74,10 +74,11 @@ def is_installed() -> bool:
 
 
 def _ts_cmd(args: List[str], include_socket: bool = True) -> List[str]:
-    cmd = [_tailscale_bin(), *args]
+    cmd = [_tailscale_bin()]
     sock = embedded_tailscale.socket_path() if include_socket else None
     if sock:
         cmd.append(f"--socket={sock}")
+    cmd.extend(args)
     return cmd
 
 
@@ -136,7 +137,7 @@ def _tailscale_up_cmd(
     auth_key: Optional[str] = None,
     reset: bool = False,
 ) -> List[str]:
-    cmd = [_tailscale_bin(), "up", f"--hostname={hostname}", _accept_routes_flag()]
+    cmd = _ts_cmd(["up", f"--hostname={hostname}", _accept_routes_flag()])
     if auth_key:
         cmd.append(f"--authkey={auth_key}")
     if advertise_routes:
@@ -176,9 +177,6 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
         auth_key=auth_key,
         reset=True,
     )
-    socket_opt = embedded_tailscale.socket_path()
-    if socket_opt:
-        cmd.append(f"--socket={socket_opt}")
 
     proc_result: Dict[str, Any] = {}
 
@@ -357,9 +355,6 @@ def up() -> Dict[str, Any]:
     _start_local_tailscale_service()
     ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(hostname=ts_hostname, advertise_routes=routes_str or None)
-    socket_opt = embedded_tailscale.socket_path()
-    if socket_opt:
-        cmd.append(f"--socket={socket_opt}")
     result = _run(cmd, timeout=90)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
@@ -394,15 +389,25 @@ def up() -> Dict[str, Any]:
 def logout() -> Dict[str, Any]:
     """Disconnect and deauthorize Tailscale on this machine."""
     if not is_installed():
-        return {"ok": False, "error": "tailscale is not installed"}
+        # Treat as already disconnected for idempotent UX.
+        return {"ok": True, "note": "Tailscale not installed; nothing to disconnect."}
 
     _run(_ts_cmd(["down"]), timeout=15)
     result = _run(_ts_cmd(["logout"]), timeout=20)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
-        if "not logged in" not in stderr.lower():
-            hint = _permission_hint(stderr)
-            return {"ok": False, "error": f"tailscale logout failed: {stderr}", "hint": hint or None}
+        lowered = stderr.lower()
+        if (
+            "not logged in" in lowered
+            or "already logged out" in lowered
+            or "logged out" in lowered
+            or "no state" in lowered
+            or "no nodekey to log out" in lowered
+            or _local_service_unreachable(stderr)
+        ):
+            return {"ok": True, "note": "Tailscale already disconnected."}
+        hint = _permission_hint(stderr)
+        return {"ok": False, "error": f"tailscale logout failed: {stderr}", "hint": hint or None}
     return {"ok": True}
 
 

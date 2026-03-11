@@ -882,6 +882,10 @@ class HubAgent:
       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
     </a>
   </div>
+  <div class="alert alert-blue" style="margin-top:10px;">
+    <strong>Keep this gateway running for best results.</strong>
+    Miner polling, remote access, and alerts work best when this app stays online continuously.
+  </div>
 
   <!-- Status Card -->
   <div class="card">
@@ -930,9 +934,10 @@ class HubAgent:
 
     <div class="step" id="step1">
       <span class="step-num" id="step1badge">1</span>
-      <strong>Download the HashWatcher App</strong>
-      <p class="muted" style="margin:6px 0 0;">Get the free companion app to monitor your miners from anywhere.</p>
+      <strong>Prerequisites: Get the HashWatcher App</strong>
+      <p class="muted" style="margin:6px 0 0;">Download the companion app first, then leave this gateway running to keep data and remote access active.</p>
       <p style="margin:8px 0 0;"><a class="btn" href="https://www.HashWatcher.app" target="_blank" onclick="markStep1Done()">Download at HashWatcher.app</a></p>
+      <p style="margin:8px 0 0;"><a class="btn" href="https://x.com/HashWatcher" target="_blank" style="background:#2c2c2e;">Follow @HashWatcher on X</a></p>
       <p class="muted" style="font-size:0.85em; margin-top:8px;">Available for iOS, Mac and Android.</p>
     </div>
 

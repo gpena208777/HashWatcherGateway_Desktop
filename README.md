@@ -1,5 +1,9 @@
 # HashWatcher Gateway Desktop
 
+<p align="center">
+  <img src="app/gateway/assets/icon.png" alt="HashWatcher Logo" width="152" />
+</p>
+
 Standalone desktop gateway for macOS and Windows that mirrors Umbrel gateway behavior:
 
 - Miner polling and normalization
@@ -20,13 +24,49 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 
 ## Prerequisites
 
-1. Install Python 3.10+ (with Tkinter support).
-2. Clone this repo.
+1. Install the HashWatcher mobile/desktop app from [www.HashWatcher.app](https://www.HashWatcher.app).
+2. Follow updates on X: [@HashWatcher](https://x.com/HashWatcher).
+3. Install Python 3.10+ (with `pip` + `venv` support).
+4. Clone this repo.
 
 For source/developer runs, you need Tailscale binaries available either:
 
 - system-installed (`tailscale` + `tailscaled`), or
 - vendored into `app/vendor/tailscale/<platform>/` (embedded runtime mode).
+
+Important: keep the gateway app running continuously so polling, route status, and remote access stay active.
+
+### Dependency Fail-Safes
+
+If your machine is missing Python or `pip`, use these checks first.
+
+#### macOS
+
+```bash
+# Check Python
+python3 --version
+
+# If python3 is missing, install it (Homebrew example)
+brew install python@3.11
+
+# Ensure pip exists
+python3 -m ensurepip --upgrade
+python3 -m pip install --upgrade pip
+```
+
+#### Windows (PowerShell)
+
+```powershell
+# Check Python launcher
+py -3 --version
+
+# If missing, install Python with winget
+winget install -e --id Python.Python.3.11
+
+# Ensure pip exists
+py -3 -m ensurepip --upgrade
+py -3 -m pip install --upgrade pip
+```
 
 ## Project Layout
 
@@ -70,30 +110,43 @@ The GUI now includes a guided wizard with iPhone-style next steps:
 
 - Start/stop gateway process
 - Step-by-step `Back` / `Next` flow
-- Tailscale auth key generation via Tailscale API
-- Tailnet + API key fields for in-app key generation
+- Auth key paste flow (same as Umbrel/Pi)
 - Subnet entry
 - Connect / turn on / turn off / disconnect actions
 - Live route-approval status checks
 - Direct links to Tailscale Keys and Machines pages
 - Embedded `tailscaled` auto-start support when bundled
+- Optional advanced Tailscale API key generation utility
 
-### macOS/Linux
+### macOS/Linux (with fail-safes)
 
 ```bash
+python3 --version
+python3 -m ensurepip --upgrade || true
+python3 -m pip install --upgrade pip
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python app/gui.py
 ```
 
-### Windows (PowerShell)
+### Windows (PowerShell, with fail-safes)
 
 ```powershell
+py -3 --version
+py -3 -m ensurepip --upgrade
+py -3 -m pip install --upgrade pip
 py -3 -m venv .venv
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python .\app\gui.py
+```
+
+If `Activate.ps1` is blocked, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 Open:
@@ -116,9 +169,11 @@ python app/main.py
 
 1. Create and populate virtualenv:
    ```bash
+   python3 -m ensurepip --upgrade || true
+   python3 -m pip install --upgrade pip
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 2. Install launch agent (uses `PI_HOSTNAME=HashWatcherGatewayDesktop`):
    ```bash
@@ -139,9 +194,12 @@ Logs:
 
 1. Create and populate virtualenv:
    ```powershell
+   py -3 -m ensurepip --upgrade
+   py -3 -m pip install --upgrade pip
    py -3 -m venv .venv
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
    .\.venv\Scripts\Activate.ps1
-   pip install -r requirements.txt
+   python -m pip install -r requirements.txt
    ```
 2. Download WinSW x64 and place it at:
    - `install\windows\winsw-x64.exe`
@@ -157,13 +215,13 @@ Logs:
 
 The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
 
-## Tailscale Setup Flow (In-App Wizard, API-first)
+## Tailscale Setup Flow (In-App Wizard, Umbrel/Pi style)
 
 1. Open the GUI (`python app/gui.py`) and click **Start Gateway**.
 2. Open **Guided Onboarding** tab.
 3. Use the wizard action button and `Next` through:
    - Start Gateway
-   - Generate Auth Key via API
+   - Open Keys Page and paste auth key
    - Connect with auth key
    - Open Machines page for route approval
    - Refresh and verify completion
