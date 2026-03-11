@@ -30,10 +30,12 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 4. Install Python 3.10+.
 5. Download this repo (clone in terminal or download ZIP from GitHub and extract).
 
-To run from this repo, you need Tailscale binaries available either:
+Tailscale requirement (simple):
 
-- system-installed (`tailscale` + `tailscaled`), or
-- vendored into `app/vendor/tailscale/<platform>/` (embedded runtime mode).
+- If you run this repo on Apple Silicon Mac, it is already included (`app/vendor/tailscale/darwin-arm64`). Nothing else to do.
+- If you run this repo on 64-bit Windows (amd64), it is also included (`app/vendor/tailscale/windows-amd64`). Nothing else to do.
+- If you run on a platform not bundled here (for example Windows ARM64), install Tailscale on that machine first so `tailscale`/`tailscaled` are available.
+- If you are using a packaged desktop release build, this should already be bundled.
 
 Important: keep the gateway app running continuously so polling, route status, and remote access stay active.
 
@@ -57,7 +59,7 @@ requirements.txt
 
 ## Embedded Tailscale Runtime
 
-To run like Umbrel/Pi (self-managed local daemon), prepare embedded binaries:
+For platforms not already bundled in this repo, you can prepare embedded binaries with:
 
 ```bash
 ./scripts/prepare_embedded_tailscale.sh
@@ -114,11 +116,6 @@ python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r r
 ```powershell
 py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; python .\app\gui.py
 ```
-
-Open:
-
-- Dashboard: `http://localhost:8787`
-- API status: `http://localhost:8787/api/status`
 
 ## Install As Background Service
 
@@ -188,7 +185,6 @@ The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
 - `STATUS_HTTP_BIND` default: `0.0.0.0`
 - `STATUS_HTTP_PORT` default: `8787`
 - `RUNTIME_CONFIG_PATH` default: `~/.hashwatcher-gateway/runtime_config.json`
-- `BITAXE_ENDPOINTS` default: `/system/info,/api/system/info`
 - `POLL_SECONDS` default: `10`
 - `HTTP_TIMEOUT_SECONDS` default: `5`
 - `TAILSCALE_BIN` optional absolute path to `tailscale`
