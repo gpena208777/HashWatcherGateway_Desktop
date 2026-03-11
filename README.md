@@ -27,7 +27,7 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 1. Install the HashWatcher mobile/desktop app from [www.HashWatcher.app](https://www.HashWatcher.app).
 2. Follow updates on X: [@HashWatcher](https://x.com/HashWatcher).
 3. Install Python 3.10+.
-4. Clone this repo.
+4. Download this repo (clone in terminal or download ZIP from GitHub and extract).
 
 To run from this repo, you need Tailscale binaries available either:
 
@@ -86,13 +86,29 @@ The desktop app includes a guided wizard with iPhone-style next steps:
 - Embedded `tailscaled` auto-start support when bundled
 - Optional advanced Tailscale API key generation utility
 
-### macOS/Linux
+### First Time Setup (Clone + Open Folder)
+
+#### macOS/Linux (clone to Desktop)
+
+```bash
+cd ~/Desktop && git clone https://github.com/gpena208777/HashWatcherGateway_Desktop.git && cd HashWatcherGateway_Desktop
+```
+
+#### Windows (PowerShell, clone to Desktop)
+
+```powershell
+cd $HOME\Desktop; git clone https://github.com/gpena208777/HashWatcherGateway_Desktop.git; cd .\HashWatcherGateway_Desktop
+```
+
+If you downloaded a ZIP instead of cloning, extract it and run `cd` into that extracted `HashWatcherGateway_Desktop` folder first.
+
+### Run Command (macOS/Linux)
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r requirements.txt && python app/gui.py
 ```
 
-### Windows (PowerShell)
+### Run Command (Windows PowerShell)
 
 ```powershell
 py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; python .\app\gui.py
