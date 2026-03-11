@@ -25,9 +25,10 @@ as the machine name (`PI_HOSTNAME`) by default in app code and service templates
 ## Prerequisites
 
 1. Install the HashWatcher mobile/desktop app from [www.HashWatcher.app](https://www.HashWatcher.app).
-2. Follow updates on X: [@HashWatcher](https://x.com/HashWatcher).
-3. Install Python 3.10+.
-4. Download this repo (clone in terminal or download ZIP from GitHub and extract).
+2. Install Tailscale on your phone and sign in to the same tailnet you will use for this gateway.
+3. Follow updates on X: [@HashWatcher](https://x.com/HashWatcher).
+4. Install Python 3.10+.
+5. Download this repo (clone in terminal or download ZIP from GitHub and extract).
 
 To run from this repo, you need Tailscale binaries available either:
 
