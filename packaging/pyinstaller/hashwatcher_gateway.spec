@@ -23,6 +23,7 @@ def _resolve_project_root() -> Path:
 
 
 project_root = _resolve_project_root()
+macos_icns = project_root / "packaging" / "macos" / "HashWatcherGatewayDesktop.icns"
 
 datas = [
     (str(project_root / "app" / "gateway" / "assets"), "app/gateway/assets"),
@@ -72,8 +73,14 @@ exe = EXE(
     entitlements_file=None,
 )
 
+bundle_kwargs = {
+    "name": "HashWatcherGatewayDesktop.app",
+    "bundle_identifier": "com.hashwatcher.gateway.desktop",
+}
+if macos_icns.exists():
+    bundle_kwargs["icon"] = str(macos_icns)
+
 app = BUNDLE(
     exe,
-    name="HashWatcherGatewayDesktop.app",
-    bundle_identifier="com.hashwatcher.gateway.desktop",
+    **bundle_kwargs,
 )

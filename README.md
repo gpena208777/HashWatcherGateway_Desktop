@@ -53,6 +53,7 @@ Optional desktop shortcut:
 ```
 
 `install_macos.sh` now builds and installs `HashWatcherGatewayDesktop.app` into `/Applications` (or `~/Applications` when needed).
+It also generates a macOS `.icns` from `app/gateway/assets/icon.png` so the installed app icon matches your project icon.
 
 Do not run macOS commands on Windows (`launchctl`, `.sh`, `source`), and do not run PowerShell commands on macOS.
 
