@@ -1646,7 +1646,10 @@ class GatewayGui(QtWidgets.QMainWindow):
                 self.stop_btn.setEnabled(True)
                 self._set_gateway_start_visual(True)
                 self._log(f"[gui] existing HashWatcher gateway already running on port {port}.")
-                self._info("Gateway Already Running", f"A HashWatcher gateway is already running on port {port}. Reusing existing service.")
+                self._info(
+                    "Gateway Already Running",
+                    f"HashWatcher Gateway is already running.\nPort: {port}\nUsing existing service.",
+                )
                 return
             self.status_var.set("Gateway Port In Use")
             self._set_gateway_start_visual(False)
@@ -1719,7 +1722,27 @@ class GatewayGui(QtWidgets.QMainWindow):
             self.external_gateway_running = False
             QtCore.QTimer.singleShot(300, self._refresh_status)
             return
+        self._log(f"[gui] failed to stop external gateway on port {port}: {detail}")
         self._error("Stop Gateway", detail)
+
+    @staticmethod
+    def _looks_like_gateway_process(process_name: str, cmdline: str) -> bool:
+        text = f"{process_name or ''} {cmdline or ''}".strip().lower()
+        if not text:
+            return False
+        if "hashwatcher pi" in text:
+            return False
+        markers = (
+            "hashwatchergateway_desktop",
+            "hashwatcher gateway desktop",
+            "hashwatcher-gateway-desktop",
+            "hashwatcher-gateway",
+            "gateway/hub_agent.py",
+            "gateway\\hub_agent.py",
+            " app\\main.py",
+            " app/main.py",
+        )
+        return any(marker in text for marker in markers)
 
     def _stop_external_gateway_process(self, port: int) -> tuple[bool, str]:
         if psutil is None:
@@ -1756,12 +1779,15 @@ class GatewayGui(QtWidgets.QMainWindow):
 
         stopped = 0
         errors: list[str] = []
+        skipped_non_gateway = 0
         for pid in unique_pids:
             try:
                 proc = psutil.Process(pid)
+                process_name = str(proc.name() or "").lower()
                 cmdline = " ".join(proc.cmdline()).lower()
-                if "hashwatcher" not in cmdline and "hub_agent.py" not in cmdline and "main.py" not in cmdline:
-                    errors.append(f"Skipped PID {pid}: not recognized as HashWatcher gateway.")
+                if not self._looks_like_gateway_process(process_name, cmdline):
+                    skipped_non_gateway += 1
+                    errors.append(f"Skipped PID {pid} ({process_name}): not HashWatcher Gateway.")
                     continue
                 proc.terminate()
                 try:
@@ -1775,8 +1801,12 @@ class GatewayGui(QtWidgets.QMainWindow):
 
         if stopped > 0:
             return True, ""
+        for error in errors:
+            self._log(f"[gui] stop detail: {error}")
+        if skipped_non_gateway and skipped_non_gateway == len(unique_pids):
+            return False, f"Port {port} is being used by another app, not HashWatcher Gateway."
         if errors:
-            return False, "; ".join(errors)
+            return False, "Could not stop HashWatcher Gateway automatically. Close other app instances and retry."
         return False, "Unable to stop the existing gateway process."
 
     def _stop_external_gateway_process_without_psutil(self, port: int) -> tuple[bool, str]:
@@ -1784,9 +1814,19 @@ class GatewayGui(QtWidgets.QMainWindow):
         if not pids:
             return False, f"No listening process found on port {port}."
 
+        gateway_verified = self._existing_gateway_status(str(port)) is not None
         stopped = 0
         errors: list[str] = []
+        skipped_non_gateway = 0
         for pid in sorted(set(pids)):
+            if os.name == "nt":
+                process_name = self._windows_process_name_without_psutil(pid).lower()
+                if process_name and not self._looks_like_gateway_process(process_name, ""):
+                    # Allow python host process only when the gateway API is confirmed on this port.
+                    if not (gateway_verified and process_name in {"python.exe", "pythonw.exe"}):
+                        skipped_non_gateway += 1
+                        errors.append(f"Skipped PID {pid} ({process_name}): not HashWatcher Gateway.")
+                        continue
             ok, err = self._terminate_pid_without_psutil(pid)
             if ok:
                 stopped += 1
@@ -1795,7 +1835,11 @@ class GatewayGui(QtWidgets.QMainWindow):
 
         if stopped > 0:
             return True, ""
-        return False, "; ".join(errors) if errors else "Unable to stop the existing gateway process."
+        for error in errors:
+            self._log(f"[gui] stop detail: {error}")
+        if skipped_non_gateway and skipped_non_gateway == len(set(pids)):
+            return False, f"Port {port} is being used by another app, not HashWatcher Gateway."
+        return False, "Could not stop HashWatcher Gateway automatically. Close other app instances and retry."
 
     def _list_listening_pids_without_psutil(self, port: int) -> list[int]:
         if os.name == "nt":
@@ -1894,7 +1938,11 @@ class GatewayGui(QtWidgets.QMainWindow):
                 if result.returncode == 0:
                     return True, ""
                 stderr = (result.stderr or result.stdout or "").strip()
-                return False, f"PID {pid}: {stderr or 'taskkill failed'}"
+                lower = stderr.lower()
+                if "no running instance" in lower or "not found" in lower:
+                    return True, ""
+                self._log(f"[gui] taskkill failed for PID {pid}: {stderr}")
+                return False, f"PID {pid}: taskkill failed"
             except Exception as exc:
                 return False, f"PID {pid}: {exc}"
 
@@ -1929,6 +1977,29 @@ class GatewayGui(QtWidgets.QMainWindow):
             return False
         except PermissionError:
             return True
+
+    @staticmethod
+    def _windows_process_name_without_psutil(pid: int) -> str:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except Exception:
+            return ""
+        lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+        if not lines:
+            return ""
+        row = lines[0]
+        if "no tasks are running" in row.lower():
+            return ""
+        parts = [part.strip().strip('"') for part in row.split(",")]
+        if not parts:
+            return ""
+        return parts[0]
 
     # ----- tailscale -----
     def generate_auth_key_via_api(self) -> None:
@@ -2372,8 +2443,8 @@ class GatewayGui(QtWidgets.QMainWindow):
         if default_button is not None:
             box.setDefaultButton(default_button)
         box.setOption(QtWidgets.QMessageBox.Option.DontUseNativeDialog, True)
-        box.setMinimumWidth(420)
-        box.setMaximumWidth(560)
+        box.setMinimumWidth(520)
+        box.setMaximumWidth(760)
         box.setStyleSheet(
             """
             QMessageBox {
@@ -2403,8 +2474,11 @@ class GatewayGui(QtWidgets.QMainWindow):
         text_label = box.findChild(QtWidgets.QLabel, "qt_msgbox_label")
         if text_label is not None:
             text_label.setWordWrap(True)
-            text_label.setMinimumWidth(320)
-            text_label.setMaximumWidth(520)
+            text_label.setMinimumWidth(420)
+            text_label.setMaximumWidth(680)
+            text_label.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        box.layout().activate()
+        box.adjustSize()
         return box
 
     def _info(self, title: str, message: str) -> None:
