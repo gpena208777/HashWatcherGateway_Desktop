@@ -1,10 +1,12 @@
-name: Build Desktop Release
+name: Build And Publish Installers
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build-macos:
@@ -14,13 +16,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Build app
+      - name: Build macOS app bundle
         run: ./scripts/build_macos_release.sh
-      - name: Archive artifact
+      - name: Build macOS installers
+        run: ./scripts/package_macos_installers.sh
+      - name: Upload macOS installers
         uses: actions/upload-artifact@v4
         with:
-          name: HashWatcherGatewayDesktop-macos-app
-          path: dist/HashWatcherGatewayDesktop.app
+          name: HashWatcherGatewayDesktop-macos-installers
+          path: |
+            release/HashWatcherGatewayDesktop.dmg
+            release/HashWatcherGatewayDesktop.pkg
 
   build-windows:
     runs-on: windows-latest
@@ -29,11 +35,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Build app
+      - name: Build Windows app bundle
         shell: powershell
         run: .\scripts\build_windows_release.ps1
-      - name: Archive artifact
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+      - name: Build Windows installer
+        shell: powershell
+        run: .\scripts\package_windows_installer.ps1
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: HashWatcherGatewayDesktop-windows-exe
-          path: dist/HashWatcherGatewayDesktop/**
+          name: HashWatcherGatewayDesktop-windows-installer
+          path: release/HashWatcherGatewayDesktop-Setup.exe
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs:
+      - build-macos
+      - build-windows
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+      - name: Publish GitHub Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/HashWatcherGatewayDesktop-macos-installers/HashWatcherGatewayDesktop.dmg
+            release-assets/HashWatcherGatewayDesktop-macos-installers/HashWatcherGatewayDesktop.pkg
+            release-assets/HashWatcherGatewayDesktop-windows-installer/HashWatcherGatewayDesktop-Setup.exe

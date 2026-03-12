@@ -10,3 +10,6 @@ logs/
 *.log
 build/
 dist/
+release/
+packaging/macos/*.iconset/
+packaging/macos/*.icns

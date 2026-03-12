@@ -10,6 +10,8 @@ Start here if you are an end user.
    - macOS: `HashWatcherGatewayDesktop.pkg` or `HashWatcherGatewayDesktop.dmg`
 3. Install and open the app.
 
+Release note: these installers are auto-built and attached when maintainers push a `v*` tag.
+
 ## Command-Line Path (From Git)
 
 ### Windows (PowerShell)

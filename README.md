@@ -28,6 +28,7 @@ For a seamless setup, users should install from GitHub Releases:
 Do not ask end users to install Python or run terminal commands.
 
 Easy GitHub step for non-technical users: click **Code** -> **Download ZIP**, extract it, then follow [INSTALL.md](INSTALL.md).
+Release installers (`.dmg`, `.pkg`, `.exe`) are automatically attached to GitHub Releases on each `v*` tag.
 
 ## Command-Line Install From Git (Source Users)
 
@@ -240,6 +241,21 @@ Output:
 - `dist\HashWatcherGatewayDesktop\HashWatcherGatewayDesktop.exe`
 
 Note: sign and notarize release artifacts before distributing to users.
+
+## Automated Release Assets (Maintainers)
+
+On push of a tag like `v1.0.2`, GitHub Actions now builds and publishes:
+
+- `HashWatcherGatewayDesktop.dmg`
+- `HashWatcherGatewayDesktop.pkg`
+- `HashWatcherGatewayDesktop-Setup.exe`
+
+Tag/push example:
+
+```bash
+git tag v1.0.2
+git push origin v1.0.2
+```
 
 ## Tailscale Setup Flow (In-App Wizard, Umbrel/Pi style)
 
