@@ -38,6 +38,9 @@ jobs:
       - name: Build Windows app bundle
         shell: powershell
         run: .\scripts\build_windows_release.ps1
+      - name: Show Windows dist output
+        shell: powershell
+        run: Get-ChildItem -Path .\dist -Recurse | Select-Object FullName
       - name: Install Inno Setup
         shell: powershell
         run: choco install innosetup -y --no-progress

@@ -6,14 +6,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$sourceDir = Join-Path $RepoRoot "dist\HashWatcherGatewayDesktop"
-$entryExe = Join-Path $sourceDir "HashWatcherGatewayDesktop.exe"
+$distDir = Join-Path $RepoRoot "dist"
 $issPath = Join-Path $RepoRoot "packaging\windows\HashWatcherGatewayDesktop.iss"
 $releaseDir = Join-Path $RepoRoot "release"
 
-if (-not (Test-Path $entryExe)) {
-    throw "Missing built app executable: $entryExe. Run scripts\build_windows_release.ps1 first."
+if (-not (Test-Path $distDir)) {
+    throw "Missing dist directory: $distDir. Run scripts\build_windows_release.ps1 first."
 }
+
+$exeCandidates = Get-ChildItem -Path $distDir -Filter "HashWatcherGatewayDesktop.exe" -File -Recurse -ErrorAction SilentlyContinue
+if (-not $exeCandidates -or $exeCandidates.Count -eq 0) {
+    throw "Missing built app executable under '$distDir'. Run scripts\build_windows_release.ps1 first."
+}
+$entryExe = ($exeCandidates | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+$sourceDir = Split-Path -Parent $entryExe
 
 if (-not (Test-Path $issPath)) {
     throw "Missing Inno Setup script: $issPath"
@@ -43,5 +49,7 @@ if (-not (Test-Path $installerPath)) {
     throw "Installer build did not produce expected output: $installerPath"
 }
 
+Write-Host "Using built executable:"
+Write-Host "  $entryExe"
 Write-Host "Created Windows installer:"
 Write-Host "  $installerPath"
