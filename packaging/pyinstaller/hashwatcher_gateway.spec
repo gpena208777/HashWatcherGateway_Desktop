@@ -1,8 +1,28 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parents[2]
+
+def _resolve_project_root() -> Path:
+    file_var = globals().get("__file__")
+    if file_var:
+        return Path(str(file_var)).resolve().parents[2]
+
+    spec_var = globals().get("SPEC")
+    if spec_var:
+        spec_path = Path(str(spec_var)).resolve()
+        if spec_path.is_file():
+            return spec_path.parents[2]
+
+    cwd = Path(os.getcwd()).resolve()
+    if (cwd / "app").exists() and (cwd / "requirements.txt").exists():
+        return cwd
+
+    raise RuntimeError("Unable to resolve project root for PyInstaller spec execution.")
+
+
+project_root = _resolve_project_root()
 
 datas = [
     (str(project_root / "app" / "gateway" / "assets"), "app/gateway/assets"),
