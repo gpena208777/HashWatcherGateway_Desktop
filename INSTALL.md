@@ -30,6 +30,8 @@ Run in the repo root:
 ./scripts/install_macos.sh
 ```
 
+This now builds `HashWatcherGatewayDesktop.app` and installs it into `/Applications` (or `~/Applications` if system Applications is not writable).
+
 ## Quick Verify
 
 ### Windows

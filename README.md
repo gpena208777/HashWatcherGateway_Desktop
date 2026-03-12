@@ -52,6 +52,8 @@ Optional desktop shortcut:
 ./scripts/install_macos.sh
 ```
 
+`install_macos.sh` now builds and installs `HashWatcherGatewayDesktop.app` into `/Applications` (or `~/Applications` when needed).
+
 Do not run macOS commands on Windows (`launchctl`, `.sh`, `source`), and do not run PowerShell commands on macOS.
 
 ## Required Gateway Name
