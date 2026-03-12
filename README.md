@@ -25,8 +25,6 @@ For a seamless setup, users should install from GitHub Releases:
 - Windows: `HashWatcherGatewayDesktop-Setup.exe` (installer)
 - macOS: `HashWatcherGatewayDesktop.pkg` or `HashWatcherGatewayDesktop.dmg`
 
-Do not ask end users to install Python or run terminal commands.
-
 Easy GitHub step for non-technical users: click **Code** -> **Download ZIP**, extract it, then follow [INSTALL.md](INSTALL.md).
 Release installers (`.dmg`, `.pkg`, `.exe`) are automatically attached to GitHub Releases on each `v*` tag.
 
