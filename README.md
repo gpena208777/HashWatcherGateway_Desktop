@@ -248,6 +248,16 @@ On push of a tag like `v1.0.2`, GitHub Actions now builds and publishes:
 - `HashWatcherGatewayDesktop.pkg`
 - `HashWatcherGatewayDesktop-Setup.exe`
 
+macOS release signing/notarization requires these GitHub repository secrets:
+
+- `APPLE_CODESIGN_P12_BASE64` (base64 of `.p12` containing Developer ID Application + Developer ID Installer certs)
+- `APPLE_CODESIGN_P12_PASSWORD`
+- `MACOS_APP_SIGN_IDENTITY` (example: `Developer ID Application: Your Name (TEAMID)`)
+- `MACOS_INSTALLER_SIGN_IDENTITY` (example: `Developer ID Installer: Your Name (TEAMID)`)
+- `APPLE_NOTARY_APPLE_ID`
+- `APPLE_NOTARY_TEAM_ID`
+- `APPLE_NOTARY_APP_PASSWORD` (app-specific password for notarization)
+
 Tag/push example:
 
 ```bash

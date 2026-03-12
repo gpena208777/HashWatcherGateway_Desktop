@@ -16,9 +16,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Import Apple signing certificates
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CODESIGN_P12_BASE64 }}
+          p12-password: ${{ secrets.APPLE_CODESIGN_P12_PASSWORD }}
       - name: Build macOS app bundle
         run: ./scripts/build_macos_release.sh
       - name: Build macOS installers
+        env:
+          MACOS_APP_SIGN_IDENTITY: ${{ secrets.MACOS_APP_SIGN_IDENTITY }}
+          MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
+          APPLE_NOTARY_APPLE_ID: ${{ secrets.APPLE_NOTARY_APPLE_ID }}
+          APPLE_NOTARY_TEAM_ID: ${{ secrets.APPLE_NOTARY_TEAM_ID }}
+          APPLE_NOTARY_APP_PASSWORD: ${{ secrets.APPLE_NOTARY_APP_PASSWORD }}
         run: ./scripts/package_macos_installers.sh
       - name: Upload macOS installers
         uses: actions/upload-artifact@v4
