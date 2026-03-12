@@ -14,6 +14,46 @@ Standalone desktop gateway for macOS and Windows that mirrors Umbrel gateway beh
 
 This repo is separate from Umbrel/Pi code.
 
+## Start Here
+
+Use [INSTALL.md](INSTALL.md) for end-user setup only (no developer noise).
+
+## End-User Install (Recommended)
+
+For a seamless setup, users should install from GitHub Releases:
+
+- Windows: `HashWatcherGatewayDesktop-Setup.exe` (installer)
+- macOS: `HashWatcherGatewayDesktop.pkg` or `HashWatcherGatewayDesktop.dmg`
+
+Do not ask end users to install Python or run terminal commands.
+
+Easy GitHub step for non-technical users: click **Code** -> **Download ZIP**, extract it, then follow [INSTALL.md](INSTALL.md).
+
+## Command-Line Install From Git (Source Users)
+
+Use these exact commands from the repo root.
+
+### Windows (PowerShell, one command)
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+.\scripts\install_windows.ps1
+```
+
+Optional desktop shortcut:
+
+```powershell
+.\scripts\create_windows_shortcut.ps1
+```
+
+### macOS (Terminal, one command)
+
+```bash
+./scripts/install_macos.sh
+```
+
+Do not run macOS commands on Windows (`launchctl`, `.sh`, `source`), and do not run PowerShell commands on macOS.
+
 ## Required Gateway Name
 
 This desktop gateway is configured to use:
@@ -22,7 +62,7 @@ This desktop gateway is configured to use:
 
 as the machine name (`PI_HOSTNAME`) by default in app code and service templates.
 
-## Prerequisites
+## Prerequisites (Developers)
 
 1. Install the HashWatcher mobile/desktop app from [www.HashWatcher.app](https://www.HashWatcher.app).
 2. Install Tailscale on your phone and sign in with the same user you will use for this gateway.
@@ -73,7 +113,7 @@ Then launch the desktop app normally and it will auto-start embedded `tailscaled
 
 Note: for end-user packaged app builds, include these binaries in the app bundle so users do not need standalone Tailscale install.
 
-## Run Desktop App
+## Run Desktop App (Developer Mode)
 
 ### Desktop App
 
@@ -114,7 +154,7 @@ python3 -m venv .venv && source .venv/bin/activate && python -m pip install -r r
 ### Run Command (Windows PowerShell)
 
 ```powershell
-py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; python .\app\gui.py
+python -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -r requirements.txt; python .\app\gui.py
 ```
 
 ## Install As Background Service
@@ -146,7 +186,7 @@ Logs:
 
 1. Create and populate virtualenv:
    ```powershell
-   py -3 -m venv .venv
+   python -m venv .venv
    .\.venv\Scripts\Activate.ps1
    python -m pip install -r requirements.txt
    ```
@@ -163,6 +203,40 @@ Logs:
    ```
 
 The service template sets `PI_HOSTNAME=HashWatcherGatewayDesktop`.
+
+Common Windows pitfalls from support logs:
+
+- `py` not recognized: use `python` instead.
+- `source .venv/bin/activate` on Windows is wrong; use `.\.venv\Scripts\Activate.ps1`.
+- `requirements.txt` not found: you are in the wrong folder. `cd` into the repo first.
+- `launchctl`/`jq` errors on Windows: those are macOS/Linux commands.
+- `C:\Users\...\AppData\Local\Microsoft\WindowsApps\python.exe`: this is a Store alias, not a real Python runtime.
+
+## Build Release App (Maintainers)
+
+Build native app bundles with PyInstaller:
+
+### macOS
+
+```bash
+./scripts/build_macos_release.sh
+```
+
+Output:
+
+- `dist/HashWatcherGatewayDesktop.app`
+
+### Windows (PowerShell)
+
+```powershell
+.\scripts\build_windows_release.ps1
+```
+
+Output:
+
+- `dist\HashWatcherGatewayDesktop\HashWatcherGatewayDesktop.exe`
+
+Note: sign and notarize release artifacts before distributing to users.
 
 ## Tailscale Setup Flow (In-App Wizard, Umbrel/Pi style)
 

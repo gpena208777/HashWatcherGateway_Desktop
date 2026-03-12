@@ -97,8 +97,8 @@ class GatewayGui(QtWidgets.QMainWindow):
         self._connect_feedback_clear_timer: Optional[QtCore.QTimer] = None
         self._auth_key_feedback_clear_timer: Optional[QtCore.QTimer] = None
 
-        self.repo_root = Path(__file__).resolve().parent.parent
-        self.app_root = self.repo_root / "app"
+        self.repo_root = self._runtime_root()
+        self.app_root = self._runtime_app_root()
         self.main_py = self.app_root / "main.py"
         self.settings_path = Path.home() / ".hashwatcher-gateway-desktop" / "gui_settings.json"
 
@@ -189,6 +189,30 @@ class GatewayGui(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(1200, self.refresh_tailscale_status)
 
     # ----- setup -----
+    @staticmethod
+    def _runtime_root() -> Path:
+        if getattr(sys, "frozen", False):
+            bundle_root = getattr(sys, "_MEIPASS", "")
+            if bundle_root:
+                return Path(str(bundle_root))
+            return Path(sys.executable).resolve().parent
+        return Path(__file__).resolve().parent.parent
+
+    def _runtime_app_root(self) -> Path:
+        candidate = self.repo_root / "app"
+        if candidate.exists():
+            return candidate
+        # Source fallback: app/gui.py -> app/
+        return Path(__file__).resolve().parent
+
+    def _gateway_launch_command(self) -> tuple[list[str], str]:
+        if getattr(sys, "frozen", False):
+            exe = str(Path(sys.executable).resolve())
+            return [exe, "--run-gateway"], str(Path(exe).parent)
+        if self.main_py.exists():
+            return [sys.executable, str(self.main_py)], str(self.app_root)
+        return [sys.executable, "-m", "gateway.hub_agent"], str(self.app_root)
+
     def _setup_stylesheet(self) -> None:
         dark = True
         if dark:
@@ -1662,10 +1686,11 @@ class GatewayGui(QtWidgets.QMainWindow):
         env["STATUS_HTTP_PORT"] = port
         env["STATUS_HTTP_BIND"] = DEFAULT_BIND
 
+        launch_cmd, launch_cwd = self._gateway_launch_command()
         try:
             self.proc = subprocess.Popen(
-                [sys.executable, str(self.main_py)],
-                cwd=str(self.app_root),
+                launch_cmd,
+                cwd=launch_cwd,
                 env=env,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -1737,6 +1762,7 @@ class GatewayGui(QtWidgets.QMainWindow):
             "hashwatcher gateway desktop",
             "hashwatcher-gateway-desktop",
             "hashwatcher-gateway",
+            "--run-gateway",
             "gateway/hub_agent.py",
             "gateway\\hub_agent.py",
             " app\\main.py",
@@ -2544,6 +2570,11 @@ def _set_desktop_app_identity() -> None:
 
 
 def main() -> None:
+    if "--run-gateway" in sys.argv:
+        from gateway.hub_agent import HubAgent
+
+        HubAgent().run()
+        return
     _set_desktop_app_identity()
     app = QtWidgets.QApplication(sys.argv)
     QtCore.QCoreApplication.setApplicationName(APP_NAME)

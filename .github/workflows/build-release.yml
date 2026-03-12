@@ -1,0 +1,39 @@
+name: Build Desktop Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build app
+        run: ./scripts/build_macos_release.sh
+      - name: Archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HashWatcherGatewayDesktop-macos-app
+          path: dist/HashWatcherGatewayDesktop.app
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build app
+        shell: powershell
+        run: .\scripts\build_windows_release.ps1
+      - name: Archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HashWatcherGatewayDesktop-windows-exe
+          path: dist/HashWatcherGatewayDesktop/**
