@@ -1599,9 +1599,9 @@ class GatewayGui(QtWidgets.QMainWindow):
             port = DEFAULT_PORT
         return f"http://127.0.0.1:{port}"
 
-    def _api_get(self, path: str) -> Dict[str, Any]:
+    def _api_get(self, path: str, timeout: float = 8) -> Dict[str, Any]:
         req = urllib.request.Request(url=self._base_url() + path, method="GET")
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     @staticmethod
@@ -1610,7 +1610,7 @@ class GatewayGui(QtWidgets.QMainWindow):
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
-    def _api_post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _api_post(self, path: str, payload: Dict[str, Any], timeout: float = 30) -> Dict[str, Any]:
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url=self._base_url() + path,
@@ -1618,7 +1618,7 @@ class GatewayGui(QtWidgets.QMainWindow):
             data=body,
             headers={"Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
     @staticmethod
@@ -2091,7 +2091,7 @@ class GatewayGui(QtWidgets.QMainWindow):
 
     def refresh_tailscale_status(self) -> None:
         try:
-            data = self._api_get("/api/status")
+            data = self._api_get("/api/status", timeout=20)
         except urllib.error.URLError:
             self._refresh_local_network_identity()
             self.last_ts_status = {
@@ -2245,11 +2245,25 @@ class GatewayGui(QtWidgets.QMainWindow):
         self._set_connect_feedback("Connecting...", tone="info", timeout_ms=0)
 
         try:
-            resp = self._api_post("/api/tailscale/setup", payload)
+            resp = self._api_post("/api/tailscale/setup", payload, timeout=120)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="ignore")
             self._set_connect_feedback("Connection failed. Check key and try again.", tone="error", timeout_ms=5500)
             self._error("Connect Failed", detail or str(exc))
+            return
+        except urllib.error.URLError as exc:
+            reason = str(getattr(exc, "reason", exc) or "").strip()
+            if "timed out" in reason.lower():
+                self._set_connect_feedback("Still connecting... check status in a few seconds.", tone="warn", timeout_ms=7000)
+                self._warn(
+                    "Connect In Progress",
+                    "Tailscale setup is still running in the background. Wait a few seconds, then click Refresh Status.",
+                )
+                QtCore.QTimer.singleShot(1800, self.refresh_tailscale_status)
+                QtCore.QTimer.singleShot(4200, self.refresh_tailscale_status)
+                return
+            self._set_connect_feedback("Connection failed. Retry in a few seconds.", tone="error", timeout_ms=5500)
+            self._error("Connect Failed", str(exc))
             return
         except Exception as exc:
             self._set_connect_feedback("Connection failed. Retry in a few seconds.", tone="error", timeout_ms=5500)

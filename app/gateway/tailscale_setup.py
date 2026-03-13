@@ -36,9 +36,42 @@ def _tailscale_bin() -> str:
     return "tailscale"
 
 
+def _windows_subprocess_kwargs() -> Dict[str, Any]:
+    if os.name != "nt":
+        return {}
+    kwargs: Dict[str, Any] = {}
+    create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if create_no_window:
+        kwargs["creationflags"] = create_no_window
+    startupinfo_cls = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_cls is not None:
+        startupinfo = startupinfo_cls()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
+def _binary_missing(returncode: int, stderr: str) -> bool:
+    text = stderr.lower()
+    return (
+        returncode == 127
+        or "not found" in text
+        or "no such file or directory" in text
+        or "not recognized as an internal or external command" in text
+    )
+
+
 def _run(cmd: List[str], timeout: int = 30) -> subprocess.CompletedProcess:
     try:
-        return subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=timeout)
+        return subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            **_windows_subprocess_kwargs(),
+        )
     except FileNotFoundError:
         return subprocess.CompletedProcess(cmd, returncode=127, stdout="", stderr=f"{cmd[0]}: not found")
 
@@ -48,29 +81,64 @@ def _start_local_tailscale_service() -> None:
     if embedded_tailscale.ensure_started():
         return
     system_name = platform.system()
+    proc_kwargs = _windows_subprocess_kwargs()
     try:
         if system_name == "Darwin":
-            subprocess.run(["open", "-a", "Tailscale"], check=False, capture_output=True, text=True, timeout=5)
+            subprocess.run(
+                ["open", "-a", "Tailscale"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                **proc_kwargs,
+            )
             return
         if system_name == "Windows":
-            candidates = [
-                r"C:\Program Files\Tailscale\tailscale.exe",
-                r"C:\Program Files (x86)\Tailscale\tailscale.exe",
+            service_cmds = [
+                ["sc", "start", "Tailscale"],
+                ["net", "start", "Tailscale"],
             ]
-            for exe in candidates:
-                if os.path.exists(exe):
-                    subprocess.Popen([exe])
+            for cmd in service_cmds:
+                result = subprocess.run(
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=8,
+                    **proc_kwargs,
+                )
+                output = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+                if result.returncode == 0:
                     return
-            subprocess.run(["sc", "start", "Tailscale"], check=False, capture_output=True, text=True, timeout=8)
+                if "already running" in output or "already been started" in output:
+                    return
+
+            daemon_candidates = [
+                r"C:\Program Files\Tailscale\tailscaled.exe",
+                r"C:\Program Files (x86)\Tailscale\tailscaled.exe",
+            ]
+            for daemon in daemon_candidates:
+                if os.path.exists(daemon):
+                    subprocess.Popen(
+                        [daemon],
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        **proc_kwargs,
+                    )
+                    return
             return
     except Exception:
         return
 
 
 def is_installed() -> bool:
-    _start_local_tailscale_service()
-    result = _run(_ts_cmd(["version"], include_socket=False), timeout=8)
-    return result.returncode == 0
+    binary = _tailscale_bin().strip()
+    if not binary:
+        return False
+    if os.path.isabs(binary):
+        return os.path.exists(binary)
+    return shutil.which(binary) is not None
 
 
 def _ts_cmd(args: List[str], include_socket: bool = True) -> List[str]:
@@ -255,18 +323,22 @@ def status() -> Dict[str, Any]:
         return info
 
     _start_local_tailscale_service()
-    result = _run(_ts_cmd(["status", "--json"]), timeout=20)
+    result = _run(_ts_cmd(["status", "--json"]), timeout=8)
     if result.returncode != 0:
         stderr = (result.stderr or result.stdout or "").strip()
         if _local_service_unreachable(stderr):
             _start_local_tailscale_service()
-            time.sleep(2)
-            retry = _run(_ts_cmd(["status", "--json"]), timeout=20)
+            time.sleep(1)
+            retry = _run(_ts_cmd(["status", "--json"]), timeout=6)
+            result = retry
             if retry.returncode == 0:
-                result = retry
                 stderr = ""
+            else:
+                stderr = (retry.stderr or retry.stdout or "").strip()
         hint = _permission_hint(stderr)
         if result.returncode != 0:
+            if _binary_missing(result.returncode, stderr):
+                info["installed"] = False
             if hint:
                 info["hint"] = hint
             return info

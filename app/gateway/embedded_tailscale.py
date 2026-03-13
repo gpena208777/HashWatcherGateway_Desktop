@@ -12,6 +12,22 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 
+def _windows_subprocess_kwargs() -> dict:
+    if os.name != "nt":
+        return {}
+    kwargs = {}
+    create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if create_no_window:
+        kwargs["creationflags"] = create_no_window
+    startupinfo_cls = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_cls is not None:
+        startupinfo = startupinfo_cls()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
 def _gateway_home() -> Path:
     return Path.home() / ".hashwatcher-gateway-desktop" / "tailscale"
 
@@ -112,14 +128,17 @@ def ensure_started() -> bool:
 
     home = _gateway_home()
     home.mkdir(parents=True, exist_ok=True)
+    proc_kwargs = _windows_subprocess_kwargs()
     if platform.system().lower().startswith("win"):
         # Windows builds typically run service-based daemon. If bundled daemon exists,
         # attempt to start it in background but do not fail hard.
         try:
             proc = subprocess.Popen(
                 [daemon_bin, f"--state={state_path()}"],
+                stdin=subprocess.DEVNULL,
                 stdout=open(_log_file(), "a", encoding="utf-8"),  # noqa: SIM115
                 stderr=subprocess.STDOUT,
+                **proc_kwargs,
             )
             _pid_file().write_text(str(proc.pid), encoding="utf-8")
             time.sleep(1.0)
@@ -145,8 +164,10 @@ def ensure_started() -> bool:
     try:
         proc = subprocess.Popen(
             cmd,
+            stdin=subprocess.DEVNULL,
             stdout=open(_log_file(), "a", encoding="utf-8"),  # noqa: SIM115
             stderr=subprocess.STDOUT,
+            **proc_kwargs,
         )
         _pid_file().write_text(str(proc.pid), encoding="utf-8")
         time.sleep(1.25)
@@ -169,4 +190,3 @@ def stop() -> None:
     except OSError:
         pass
     pid_file.unlink(missing_ok=True)
-

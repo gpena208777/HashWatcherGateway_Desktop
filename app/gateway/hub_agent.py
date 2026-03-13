@@ -521,10 +521,10 @@ class HubAgent:
             "platform": f"hashwatcher-gateway-{platform.system().lower()}",
         }
 
-    def get_network_info(self) -> Dict[str, Any]:
+    def get_network_info(self, ts_status: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         local_ip = self._get_local_ip()
         subnet = tailscale_setup.detect_subnet()
-        ts = tailscale_setup.status()
+        ts = ts_status or tailscale_setup.status()
 
         if not subnet and self.user_subnet_cidr:
             subnet = self.user_subnet_cidr
@@ -586,7 +586,7 @@ class HubAgent:
                 snapshot = agent.state.snapshot()
                 ts_status = tailscale_setup.status()
 
-                network_info = agent.get_network_info()
+                network_info = agent.get_network_info(ts_status=ts_status)
                 full_status = {
                     "ok": True,
                     "agentId": agent.agent_id,
