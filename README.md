@@ -6,13 +6,9 @@
 
 Standalone desktop gateway for macOS and Windows that mirrors Umbrel gateway behavior:
 
-- Miner polling and normalization
-- Subnet miner discovery
-- Local dashboard + JSON API on port `8787`
 - Tailscale setup/status controls
-- Miner HTTP proxy endpoint
 
-This repo is separate from Umbrel/Pi code.
+This repo is separate from Umbrel code.
 
 ## Start Here
 
