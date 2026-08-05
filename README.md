@@ -120,7 +120,7 @@ The desktop app includes a guided wizard with iPhone-style next steps:
 - Start/stop gateway process
 - Step-by-step `Back` / `Next` flow
 - Auth key paste flow (same as Umbrel/Pi)
-- Subnet entry
+- Automatic local-network route, with optional additional LAN/VLAN routes
 - Connect / turn on / turn off / disconnect actions
 - Live route-approval status checks
 - Direct links to Tailscale Keys and Machines pages
@@ -269,6 +269,7 @@ git push origin v1.0.2
    - Start Gateway
    - Open Keys Page and paste auth key
    - Connect with auth key
+   - Leave **Other local networks** blank unless miners live on another LAN or VLAN. Enter extra private CIDRs separated by commas, for example `10.20.0.0/16, 192.168.50.0/24`.
    - Open Machines page for route approval
    - Refresh and verify completion
 4. Completion criteria in status panel:

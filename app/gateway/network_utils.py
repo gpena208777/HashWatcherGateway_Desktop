@@ -8,7 +8,7 @@ import os
 import platform
 import socket
 import subprocess
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, List, Optional, Tuple
 
 try:
     import psutil  # type: ignore
@@ -42,6 +42,8 @@ _PREFERRED_IFACE_PREFIXES = (
     "ethernet",  # Windows ethernet display name
 )
 
+_TAILSCALE_CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
+
 
 def is_lan_ipv4(ip: str) -> bool:
     """Return True for private, routable LAN IPv4 addresses."""
@@ -54,9 +56,47 @@ def is_lan_ipv4(ip: str) -> bool:
     if addr.is_loopback or addr.is_link_local or addr.is_multicast or addr.is_unspecified:
         return False
     # Explicitly skip Tailscale's CGNAT range.
-    if addr in ipaddress.ip_network("100.64.0.0/10"):
+    if addr in _TAILSCALE_CGNAT_NETWORK:
         return False
     return bool(addr.is_private)
+
+
+def parse_lan_routes(raw: str) -> Tuple[List[str], List[str]]:
+    """Parse user-entered LAN routes into safe, canonical CIDRs.
+
+    Users may separate routes with commas, semicolons, or new lines. Only
+    private IPv4 network CIDRs are accepted: a Tailscale 100.x address, a
+    public network, a host address, or overlapping routes must never be
+    advertised as a subnet route.
+    """
+    routes: List[ipaddress.IPv4Network] = []
+    errors: List[str] = []
+    entries = [entry.strip() for entry in raw.replace(";", ",").replace("\n", ",").split(",")]
+
+    for entry in entries:
+        if not entry:
+            continue
+        try:
+            network = ipaddress.ip_network(entry, strict=True)
+        except ValueError:
+            errors.append(f"{entry!r} is not a network CIDR (use e.g. 192.168.1.0/24)")
+            continue
+        if network.version != 4:
+            errors.append(f"{entry!r} is not an IPv4 network")
+            continue
+        network_v4 = network
+        if network_v4.prefixlen < 8 or network_v4.prefixlen > 30:
+            errors.append(f"{entry!r} must use a prefix from /8 through /30")
+            continue
+        if not is_lan_ipv4(str(network_v4.network_address)):
+            errors.append(f"{entry!r} is not a private LAN network")
+            continue
+        if any(network_v4.overlaps(existing) for existing in routes):
+            errors.append(f"{entry!r} overlaps another network already listed")
+            continue
+        routes.append(network_v4)
+
+    return [str(route) for route in routes], errors
 
 
 def _should_skip_iface(name: str) -> bool:

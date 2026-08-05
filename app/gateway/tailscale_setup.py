@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import platform
@@ -215,8 +216,46 @@ def _tailscale_up_cmd(
     return cmd
 
 
+def resolve_advertised_routes(additional_routes: Optional[str] = None) -> Dict[str, Any]:
+    """Build the routes to share, keeping the detected LAN separate from extras."""
+    extras, errors = network_utils.parse_lan_routes(additional_routes or "")
+    if errors:
+        return {"ok": False, "error": "; ".join(errors)}
+
+    detected = detect_subnet()
+    routes: List[str] = []
+    if detected:
+        routes.append(detected)
+        detected_network = ipaddress.ip_network(detected)
+        for route in extras:
+            extra_network = ipaddress.ip_network(route)
+            if route != detected and extra_network.overlaps(detected_network):
+                return {
+                    "ok": False,
+                    "error": f"{route} overlaps the local network ({detected}); add a separate network instead.",
+                }
+    for route in extras:
+        if route not in routes:
+            routes.append(route)
+
+    if not routes:
+        return {
+            "ok": False,
+            "error": (
+                "We could not find your local network. Enter the network your miners use, "
+                "for example 192.168.1.0/24."
+            ),
+        }
+    return {
+        "ok": True,
+        "detectedRoute": detected,
+        "additionalRoutes": extras,
+        "routes": routes,
+    }
+
+
 def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
-    """Authenticate Tailscale and advertise the local subnet route."""
+    """Authenticate Tailscale and advertise the local plus optional extra routes."""
     if not is_installed():
         return {"ok": False, "error": "tailscale is not installed"}
 
@@ -226,22 +265,18 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
     if not auth_key.startswith("tskey-"):
         return {"ok": False, "error": "authKey must start with 'tskey-'"}
 
-    resolved_cidr = (subnet_cidr or "").strip() or detect_subnet()
-    if not resolved_cidr:
-        return {
-            "ok": False,
-            "error": (
-                "Could not detect local subnet. Enter your LAN subnet in the "
-                "\"Subnet (optional)\" field (e.g. 192.168.1.0/24)."
-            ),
-        }
+    route_resolution = resolve_advertised_routes(subnet_cidr)
+    if not route_resolution.get("ok"):
+        return {"ok": False, "error": route_resolution.get("error", "Could not choose a local network")}
+    routes = route_resolution["routes"]
+    routes_csv = ",".join(routes)
 
     _ensure_ip_forwarding()
     _start_local_tailscale_service()
     ts_hostname = os.getenv("PI_HOSTNAME", "HashWatcherGatewayDesktop")
     cmd = _tailscale_up_cmd(
         hostname=ts_hostname,
-        advertise_routes=resolved_cidr,
+        advertise_routes=routes_csv,
         auth_key=auth_key,
         reset=True,
     )
@@ -273,7 +308,9 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
             if current.get("authenticated") and current.get("ip"):
                 return {
                     "ok": True,
-                    "advertisedRoutes": [resolved_cidr],
+                    "advertisedRoutes": routes,
+                    "detectedRoute": route_resolution.get("detectedRoute"),
+                    "additionalRoutes": route_resolution.get("additionalRoutes", []),
                     "ip": current.get("ip"),
                     "hostname": current.get("hostname"),
                 }
@@ -287,7 +324,9 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
         if current.get("authenticated") and current.get("ip"):
             return {
                 "ok": True,
-                "advertisedRoutes": [resolved_cidr],
+                "advertisedRoutes": routes,
+                "detectedRoute": route_resolution.get("detectedRoute"),
+                "additionalRoutes": route_resolution.get("additionalRoutes", []),
                 "ip": current.get("ip"),
                 "hostname": current.get("hostname"),
             }
@@ -295,7 +334,9 @@ def setup(auth_key: str, subnet_cidr: Optional[str] = None) -> Dict[str, Any]:
     current = status()
     return {
         "ok": True,
-        "advertisedRoutes": [resolved_cidr],
+        "advertisedRoutes": routes,
+        "detectedRoute": route_resolution.get("detectedRoute"),
+        "additionalRoutes": route_resolution.get("additionalRoutes", []),
         "ip": current.get("ip"),
         "hostname": current.get("hostname") or ts_hostname,
         "note": "Tailscale connected but IP may still be propagating.",
@@ -415,13 +456,18 @@ def up() -> Dict[str, Any]:
     if not is_installed():
         return {"ok": False, "error": "tailscale is not installed"}
 
-    fresh_subnet = detect_subnet()
-    if fresh_subnet:
-        routes_str = fresh_subnet
+    # Preserve the routes selected during setup. Re-detecting here used to
+    # discard user-added LANs and could make a stale route look auto-detected.
+    prefs = _get_prefs()
+    saved_routes = prefs.get("AdvertiseRoutes", []) if prefs else []
+    saved_csv = ",".join(str(route) for route in saved_routes if isinstance(route, str))
+    saved_valid, _saved_errors = network_utils.parse_lan_routes(saved_csv)
+    if saved_valid:
+        routes = saved_valid
     else:
-        prefs = _get_prefs()
-        routes = prefs.get("AdvertiseRoutes", []) if prefs else []
-        routes_str = ",".join(routes) if routes else ""
+        route_resolution = resolve_advertised_routes()
+        routes = route_resolution.get("routes", []) if route_resolution.get("ok") else []
+    routes_str = ",".join(routes)
 
     _ensure_ip_forwarding()
     _start_local_tailscale_service()
@@ -445,7 +491,7 @@ def up() -> Dict[str, Any]:
                 "ok": True,
                 "ip": current.get("ip"),
                 "hostname": current.get("hostname"),
-                "advertisedRoutes": [routes_str] if routes_str else [],
+                "advertisedRoutes": routes,
             }
         hint = _permission_hint(stderr)
         return {"ok": False, "error": stderr or "tailscale up failed", "hint": hint or None}
@@ -454,7 +500,7 @@ def up() -> Dict[str, Any]:
         "ok": True,
         "ip": current.get("ip"),
         "hostname": current.get("hostname"),
-        "advertisedRoutes": [routes_str] if routes_str else [],
+        "advertisedRoutes": routes,
     }
 
 

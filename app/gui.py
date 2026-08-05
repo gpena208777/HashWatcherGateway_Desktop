@@ -982,7 +982,7 @@ class GatewayGui(QtWidgets.QMainWindow):
     def _build_step_connect(self) -> QtWidgets.QWidget:
         panel, card = self._step_card("Connect Gateway")
 
-        intro = QtWidgets.QLabel("Use your auth key to connect this machine to your tailnet. Subnet can stay blank for auto-detect.")
+        intro = QtWidgets.QLabel("Use your auth key to connect this computer. Your local network is found automatically.")
         intro.setWordWrap(True)
         intro.setStyleSheet("font-weight: 600;")
         card.addWidget(intro)
@@ -998,24 +998,24 @@ class GatewayGui(QtWidgets.QMainWindow):
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(10)
 
-        self.subnet_expand_btn = QtWidgets.QPushButton("Expand Optional Subnet")
-        self._set_button_role(self.subnet_expand_btn, "secondary")
-        self.subnet_expand_btn.setCheckable(True)
-        self.subnet_expand_btn.toggled.connect(self._set_subnet_advanced_visible)
-        controls_layout.addWidget(self.subnet_expand_btn, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
-
-        self.subnet_advanced_frame = QtWidgets.QFrame()
-        subnet_layout = QtWidgets.QVBoxLayout(self.subnet_advanced_frame)
+        subnet_layout = QtWidgets.QVBoxLayout()
         subnet_layout.setContentsMargins(0, 0, 0, 0)
         subnet_layout.setSpacing(6)
-        subnet_layout.addWidget(QtWidgets.QLabel("Subnet CIDR (optional, example: 192.168.1.0/24)"))
+        subnet_layout.addWidget(QtWidgets.QLabel("Other local networks (optional)"))
 
         self.subnet_input = QtWidgets.QLineEdit()
-        self.subnet_input.setMaximumWidth(260)
+        self.subnet_input.setPlaceholderText("Only if miners are elsewhere: 10.20.0.0/16")
+        self.subnet_input.setMaximumWidth(420)
         self.subnet_input.textChanged.connect(self.ts_subnet_var.set)
         subnet_layout.addWidget(self.subnet_input, 0, QtCore.Qt.AlignmentFlag.AlignLeft)
-        controls_layout.addWidget(self.subnet_advanced_frame)
-        self._set_subnet_advanced_visible(False)
+        subnet_hint = QtWidgets.QLabel(
+            "Leave blank for most homes. Add another private network only when miners are on a separate VLAN or LAN. "
+            "Use commas for more than one."
+        )
+        subnet_hint.setWordWrap(True)
+        subnet_hint.setStyleSheet("font-size:12px; color:#9ca3af;")
+        subnet_layout.addWidget(subnet_hint)
+        controls_layout.addLayout(subnet_layout)
 
         buttons = QtWidgets.QHBoxLayout()
 
@@ -1359,11 +1359,6 @@ class GatewayGui(QtWidgets.QMainWindow):
         self.connect_controls_frame.setVisible(show)
         self.connect_controls_toggle_btn.setText("Hide Connection Controls" if show else "Expand Connection Controls")
 
-    def _set_subnet_advanced_visible(self, visible: bool) -> None:
-        show = bool(visible)
-        self.subnet_advanced_frame.setVisible(show)
-        self.subnet_expand_btn.setText("Hide Optional Subnet" if show else "Expand Optional Subnet")
-
     def _set_connect_feedback(self, message: str, tone: str = "info", timeout_ms: int = 3500) -> None:
         self.connect_feedback_var.set(message)
         color = {
@@ -1466,7 +1461,7 @@ class GatewayGui(QtWidgets.QMainWindow):
                 data = json.load(fh)
             self.hostname_var.set(str(data.get("hostname") or DEFAULT_HOSTNAME))
             self.port_var.set(str(data.get("port") or DEFAULT_PORT))
-            self.ts_subnet_var.set(str(data.get("subnet") or ""))
+            self.ts_subnet_var.set(str(data.get("additionalSubnets") or data.get("subnet") or ""))
             self.ts_tailnet_var.set(str(data.get("tailnet") or ""))
             self.ts_auth_key_var.set(str(data.get("authKey") or ""))
         except Exception:
@@ -1476,7 +1471,7 @@ class GatewayGui(QtWidgets.QMainWindow):
         payload = {
             "hostname": self.hostname_var.get().strip() or DEFAULT_HOSTNAME,
             "port": self.port_var.get().strip() or DEFAULT_PORT,
-            "subnet": self.ts_subnet_var.get().strip(),
+            "additionalSubnets": self.ts_subnet_var.get().strip(),
             "tailnet": self.ts_tailnet_var.get().strip(),
             "authKey": self.ts_auth_key_var.get().strip(),
         }
@@ -2401,9 +2396,6 @@ class GatewayGui(QtWidgets.QMainWindow):
         if hasattr(self, "connect_controls_toggle_btn"):
             self.connect_controls_toggle_btn.setChecked(False)
             self._set_connect_controls_visible(False)
-        if hasattr(self, "subnet_expand_btn"):
-            self.subnet_expand_btn.setChecked(False)
-            self._set_subnet_advanced_visible(False)
         self._render_wizard_step()
 
     def _wizard_progress_text(self) -> str:

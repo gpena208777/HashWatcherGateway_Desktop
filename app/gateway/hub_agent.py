@@ -126,7 +126,7 @@ class HubAgent:
         self.paired_miner_mac = ""
         self.paired_miner_hostname = ""
         self.paired = bool(self.bitaxe_host.strip())
-        self.user_subnet_cidr = ""
+        self.user_subnet_routes: List[str] = []
 
         self.config_lock = threading.Lock()
         self._load_runtime_config()
@@ -183,9 +183,14 @@ class HubAgent:
                 self.paired = paired_flag
             else:
                 self.paired = bool(self.bitaxe_host.strip())
-            user_subnet = str(cfg.get("userSubnetCIDR", "")).strip()
-            if user_subnet:
-                self.user_subnet_cidr = user_subnet
+            saved_routes = cfg.get("userSubnetCIDRs")
+            if isinstance(saved_routes, list):
+                self.user_subnet_routes = [str(route).strip() for route in saved_routes if str(route).strip()]
+            else:
+                # Keep installations created by older gateway releases working.
+                legacy_subnet = str(cfg.get("userSubnetCIDR", "")).strip()
+                if legacy_subnet:
+                    self.user_subnet_routes, _errors = network_utils.parse_lan_routes(legacy_subnet)
         except Exception as exc:
             print(f"[{now_iso()}] WARNING: failed to load runtime config: {exc}", flush=True)
 
@@ -198,7 +203,7 @@ class HubAgent:
             "minerMac": self.paired_miner_mac,
             "minerHostname": self.paired_miner_hostname,
             "paired": self.paired,
-            "userSubnetCIDR": self.user_subnet_cidr,
+            "userSubnetCIDRs": self.user_subnet_routes,
             "updatedAtIso": now_iso(),
         }
         os.makedirs(os.path.dirname(self.runtime_config_path), exist_ok=True)
@@ -523,24 +528,21 @@ class HubAgent:
 
     def get_network_info(self, ts_status: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         local_ip = self._get_local_ip()
-        subnet = tailscale_setup.detect_subnet()
+        detected_subnet = tailscale_setup.detect_subnet()
         ts = ts_status or tailscale_setup.status()
 
-        if not subnet and self.user_subnet_cidr:
-            subnet = self.user_subnet_cidr
-        if not subnet:
-            routes = ts.get("advertisedRoutes", [])
-            if routes:
-                subnet = routes[0]
-        if not local_ip and subnet:
-            base = subnet.split("/")[0]
+        # Do not show an advertised route as an auto-detected network. That
+        # conflated two different values and made old Tailscale routes look
+        # like a new detection result.
+        if not local_ip and detected_subnet:
+            base = detected_subnet.split("/")[0]
             octets = base.split(".")
             if len(octets) == 4:
                 local_ip = f"{octets[0]}.{octets[1]}.{octets[2]}.x (from subnet)"
 
         return {
             "localIp": local_ip,
-            "detectedSubnet": subnet,
+            "detectedSubnet": detected_subnet,
             "advertisedRoutes": ts.get("advertisedRoutes", []),
             "routesApproved": ts.get("routesApproved", False),
             "routesPending": ts.get("routesPending", False),
@@ -686,11 +688,11 @@ class HubAgent:
                     return
                 if parsed.path == "/api/tailscale/setup":
                     auth_key = str(payload.get("authKey") or "")
-                    subnet_cidr = str(payload.get("subnetCIDR") or "")
-                    result = tailscale_setup.setup(auth_key=auth_key, subnet_cidr=subnet_cidr or None)
-                    if result.get("ok") and subnet_cidr.strip():
+                    additional_subnets = str(payload.get("subnetCIDR") or "")
+                    result = tailscale_setup.setup(auth_key=auth_key, subnet_cidr=additional_subnets or None)
+                    if result.get("ok"):
                         with agent.config_lock:
-                            agent.user_subnet_cidr = subnet_cidr.strip()
+                            agent.user_subnet_routes = list(result.get("additionalRoutes") or [])
                             agent._persist_runtime_config()
                     http_status = 200 if result.get("ok") else 400
                     self._send_json(result, status=http_status)
@@ -753,6 +755,8 @@ class HubAgent:
         host = status.get("hostTelemetry") or {}
         net = network_info or {}
         detected_subnet = net.get("detectedSubnet") or "-"
+        advertised_routes = [str(route) for route in (ts_status.get("advertisedRoutes") or []) if str(route).strip()]
+        advertised_routes_display = ", ".join(advertised_routes) or "-"
         local_ip = net.get("localIp") or "-"
         ts_ip = ts_status.get("ip", "-")
         ts_hostname_actual = ts_status.get("hostname", "-")
@@ -912,13 +916,13 @@ class HubAgent:
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
       <div>
         <h2 style="margin:0;">Tailscale <span id="tsBadge" class="badge {'badge-yellow' if ts_online and routes_pending else ts_status_class}">{'Routes Pending' if ts_online and routes_pending else ts_status_label}</span></h2>
-        <p id="tsSubtitle" class="muted" style="margin:4px 0 0;font-size:0.85em;">{'IP: <code>' + str(ts_ip) + '</code> &middot; Subnet: <code>' + str(detected_subnet) + '</code>' if ts_online else 'Remote access is off. ' + ('Use the button to reconnect.' if can_turn_on else 'Complete the setup below to connect.')}</p>
+        <p id="tsSubtitle" class="muted" style="margin:4px 0 0;font-size:0.85em;">{'IP: <code>' + str(ts_ip) + '</code> &middot; Shared networks: <code>' + advertised_routes_display + '</code>' if ts_online else 'Remote access is off. ' + ('Use the button to reconnect.' if can_turn_on else 'Complete the setup below to connect.')}</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         {'<button onclick="turnOffTailscale()" class="btn" style="background:#2c2c2e;color:rgba(255,255,255,0.7);border:1px solid rgba(255,255,255,0.15);">Turn Off</button><a href="#" onclick="disconnectTailscale(); return false;" style="color:rgba(255,255,255,0.35);font-size:0.8em;margin-left:4px;">Disconnect</a>' if ts_online else '<button onclick="turnOnTailscale()" class="btn">Turn On</button>' if can_turn_on else ''}
       </div>
     </div>
-    <div id="tsStep4Warning" class="alert alert-yellow" style="margin:10px 0 0; {'display:block;' if ts_online and not routes_approved else 'display:none;'}">&#9888; <strong>Step 4 not complete yet.</strong> Waiting for API confirmation that subnet routes are approved. Go to the <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines page</a>, find <code>{ts_machine_name}</code>, click <strong>&hellip;</strong> &rarr; <strong>Edit route settings</strong>, and approve <code>{detected_subnet}</code>. This warning clears only when the API reports routes approved.</div>
+    <div id="tsStep4Warning" class="alert alert-yellow" style="margin:10px 0 0; {'display:block;' if ts_online and not routes_approved else 'display:none;'}">&#9888; <strong>Step 4 not complete yet.</strong> Waiting for API confirmation that subnet routes are approved. Go to the <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines page</a>, find <code>{ts_machine_name}</code>, click <strong>&hellip;</strong> &rarr; <strong>Edit route settings</strong>, and approve <code>{advertised_routes_display}</code>. This warning clears only when the API reports routes approved.</div>
     {expiry_banner}
     <span id="tsControlResult" style="font-size:0.85em;display:block;margin-top:6px;"></span>
   </div>
@@ -965,9 +969,9 @@ class HubAgent:
         <input type="text" id="tsAuthKey" placeholder="tskey-auth-..." style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff;font-family:monospace;font-size:0.9em;">
       </div>
       <div style="margin:12px 0 8px;">
-        <label for="tsSubnetCIDR" style="display:block;font-size:0.9em;margin-bottom:4px;">Subnet (optional)</label>
-        <input type="text" id="tsSubnetCIDR" placeholder="e.g. 192.168.1.0/24 or 10.51.127.0/24" style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff;font-family:monospace;font-size:0.9em;">
-        <p class="muted" style="font-size:0.8em;margin:4px 0 0;">If auto-detect fails, type your LAN subnet here. Use the first three numbers of your network plus <code>.0/24</code> (e.g. <code>192.168.1.0/24</code> or <code>10.51.127.0/24</code>).</p>
+        <label for="tsSubnetCIDR" style="display:block;font-size:0.9em;margin-bottom:4px;">Other local networks (optional)</label>
+        <input type="text" id="tsSubnetCIDR" placeholder="Only if miners are elsewhere: 10.20.0.0/16" style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:#fff;font-family:monospace;font-size:0.9em;">
+        <p class="muted" style="font-size:0.8em;margin:4px 0 0;">Your local network is shared automatically. Add another private network only for a separate VLAN or LAN; use commas for more than one.</p>
       </div>
       <button onclick="connectTailscale()" class="btn" id="tsConnectBtn">Connect Tailscale</button>
       <span id="tsResult" style="margin-left:10px;font-size:0.9em;"></span>
@@ -977,7 +981,7 @@ class HubAgent:
       <span class="step-num {'step-action' if ts_online and not routes_approved else 'step-done' if routes_approved else ''}" id="step4badge">{'&#10003;' if routes_approved else '4'}</span>
       <strong>Approve Subnet Routes</strong>
       <div id="step4InlineWarning" class="alert alert-yellow" style="margin:8px 0; {'display:block;' if ts_online and not routes_approved else 'display:none;'}">&#9888; <strong>Step 4 not complete yet:</strong> routes are not approved in API status. Approve subnet routes in the Tailscale admin console and wait for API confirmation.</div>
-      <p class="muted" style="margin:6px 0 0;">Go to the <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines page</a>. Find <code>{ts_machine_name}</code>, click the <strong>&hellip;</strong> menu, then <strong>Edit route settings</strong>. Approve the route for your local network <code>{detected_subnet}</code>.</p>
+      <p class="muted" style="margin:6px 0 0;">Go to the <a href="https://login.tailscale.com/admin/machines" target="_blank">Tailscale Machines page</a>. Find <code>{ts_machine_name}</code>, click the <strong>&hellip;</strong> menu, then <strong>Edit route settings</strong>. Approve every shared network shown here: <code>{advertised_routes_display}</code>.</p>
       <details style="margin-top:10px;">
         <summary style="cursor:pointer;color:#33e680;font-size:0.9em;">Show me how</summary>
         <p class="muted" style="font-size:0.85em;margin:8px 0 4px;">1. Find your device and click the <strong>&hellip;</strong> menu:</p>
@@ -1227,6 +1231,7 @@ async function pollStatus() {{
     const tsHostname = ts.hostname || '-';
     const localIp = net.localIp || '-';
     const localNetwork = net.detectedSubnet || '-';
+    const sharedNetworks = (ts.advertisedRoutes || []).join(', ') || '-';
 
     const statusBadge = document.getElementById('statusBadge');
     if (statusBadge) {{
@@ -1267,7 +1272,7 @@ async function pollStatus() {{
     const tsSubtitle = document.getElementById('tsSubtitle');
     if (tsSubtitle) {{
       if (tsOnline) {{
-        tsSubtitle.innerHTML = `IP: <code>${{tsIp}}</code> &middot; Subnet: <code>${{localNetwork}}</code>`;
+        tsSubtitle.innerHTML = `IP: <code>${{tsIp}}</code> &middot; Shared networks: <code>${{sharedNetworks}}</code>`;
       }} else {{
         tsSubtitle.textContent = 'Remote access is off.';
       }}
