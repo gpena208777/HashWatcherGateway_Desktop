@@ -11,6 +11,18 @@ APP_NAME="HashWatcherGatewayDesktop.app"
 
 cd "${REPO_ROOT}"
 
+pip_install_with_retry() {
+  local description="$1"
+  shift
+
+  if "${VENV_PY}" -m pip "$@"; then
+    return 0
+  fi
+
+  echo "${description} failed; retrying with longer timeout in case the connection reset..."
+  "${VENV_PY}" -m pip --timeout 60 --retries 10 "$@"
+}
+
 if [[ ! -f "${REPO_ROOT}/requirements.txt" ]]; then
   echo "requirements.txt not found. Run this script from the HashWatcherGateway_Desktop repo." >&2
   exit 1
@@ -27,8 +39,8 @@ if [[ ! -x "${VENV_PY}" ]]; then
 fi
 
 echo "Installing dependencies..."
-"${VENV_PY}" -m pip install --upgrade pip
-"${VENV_PY}" -m pip install -r "${REPO_ROOT}/requirements.txt"
+pip_install_with_retry "pip upgrade" install --upgrade pip
+pip_install_with_retry "Dependency install" install -r "${REPO_ROOT}/requirements.txt"
 
 echo "Installing launch agent..."
 PYTHON_BIN="${VENV_PY}" "${REPO_ROOT}/scripts/install_macos_launchagent.sh"

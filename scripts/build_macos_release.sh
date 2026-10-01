@@ -20,8 +20,20 @@ else
   exit 1
 fi
 
-"${PYTHON_BIN}" -m pip install --upgrade pip
-"${PYTHON_BIN}" -m pip install -r requirements.txt pyinstaller
+pip_install_with_retry() {
+  local description="$1"
+  shift
+
+  if "${PYTHON_BIN}" -m pip "$@"; then
+    return 0
+  fi
+
+  echo "${description} failed; retrying with longer timeout in case the connection reset..."
+  "${PYTHON_BIN}" -m pip --timeout 60 --retries 10 "$@"
+}
+
+pip_install_with_retry "pip upgrade" install --upgrade pip
+pip_install_with_retry "Dependency install" install -r requirements.txt pyinstaller
 
 if command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1 && [[ -f "${PNG_ICON}" ]]; then
   mkdir -p "${REPO_ROOT}/packaging/macos"
